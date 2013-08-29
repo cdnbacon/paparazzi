@@ -3,7 +3,7 @@
 'use strict';
 
 var argv = require('optimist')
-  .usage('Usage: $0 --username <selenium username> --password <selenium password> --url <webpage url> --save <dir>')
+  .usage('Usage: $0 --username <selenium username> --password <selenium password> --url <webpage url> --save <dir> [--browser <browser id>]')
   .demand('username')
   .describe('username', 'The selenium server user name')
   .demand('password')
@@ -12,6 +12,8 @@ var argv = require('optimist')
   .describe('url', 'The url of the page to screenshot')
   .default('save', './screenshots')
   .describe('save', 'The directory in which to save the screenshots')
+  .default('browser', '*')
+  .describe('browser', 'The type of browser to test against: IE6-10, Chrome, Safari5-6')
   .argv
 
 var grabber = require('../index');
@@ -21,7 +23,14 @@ var selenium = new URIjs('http://ondemand.saucelabs.com/wd/hub')
   .username(argv.username)
   .password(argv.password);
 
-grabber.grab(argv.url, selenium.href(), argv.save, function(err){
+var options = {
+  dir:      argv.save,
+  url:      argv.url,
+  browser:  argv.browser,
+  selenium: selenium.href()
+};
+
+grabber.grab(options, function(err){
   if (err) console.error(err);
   console.log('Done');
 });

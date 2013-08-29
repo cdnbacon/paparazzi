@@ -29,14 +29,20 @@ function mkdir(dir, callback) {
 /**
  * Launches each browser in the matrix, visits the web page, grabs the screenshot and saves it
  *
- * @param url       The url to visit
- * @param selenium  The selenium server url
- * @param dir       The directory where to save screenshots
+ * @param options
+ *        - url       The url to visit
+ *        - selenium  The selenium server url
+ *        - dir       The directory where to save screenshots
+ *        - filter    The browser matrix filter, specify a browser id, like `IE6`
  * @param callback  The callback for completion
  */
-function grab(url, selenium, dir, callback) {
-  var browser = wd.remote(selenium);
-  var uri = new URIjs(url);
+function grab(options, callback) {
+  var url      = options.url;
+  var selenium = options.selenium;
+  var dir      = options.dir;
+  var filter   = options.browser || '*';
+  var browser  = wd.remote(selenium);
+  var uri      = new URIjs(url);
 
   browser.on('status', function(info){
     console.log('\x1b[36m%s\x1b[0m', info);
@@ -59,6 +65,10 @@ function grab(url, selenium, dir, callback) {
     {id: 'Safari5', os: 'Mac 10.6',   browser: 'safari', version: '5'},
     {id: 'Safari6', os: 'Mac 10.8',   browser: 'safari', version: '6'}
   ];
+
+  if (filter !== '*') {
+    matrix = matrix.filter(function(b) {return b.id === filter;});
+  }
 
   function grabScreenshot(env, done) {
     var desired = {
