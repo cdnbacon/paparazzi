@@ -6,7 +6,7 @@
 
 ## Install
 
-    npm install paparazzi
+    npm install paparazzi -g   # Soon :) Need to put it on the bin path 
 
 ## Snapping screenshots
 
