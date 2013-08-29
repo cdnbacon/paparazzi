@@ -66,8 +66,8 @@ function grab(url, selenium, dir, callback) {
       browserName: env.browser,
       version:     env.version,
       platform:    env.os,
-      tags:        ['examples'],
-      name:        'This is an example test'
+      tags:        ['paparazzi'],
+      name:        'Screenshot for ' + env.id
     };
 
     browser.init(desired, function() {
