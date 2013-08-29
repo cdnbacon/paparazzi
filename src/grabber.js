@@ -77,11 +77,10 @@ function grab(url, selenium, dir, callback) {
 
           if (!err) {
             var ctx = _.defaults(env, {
-              hostname: uri.hostname(),
               path: _s.slugify(uri.resource())
             });
 
-            var name = sprintf('%(hostname)s_%(path)s_on%(id)s.png', ctx);
+            var name = sprintf('%(path)s_on%(id)s.png', ctx);
 
             fs.writeFile(path.join(dir, name), new Buffer(base64bytes, 'base64'));
           }
