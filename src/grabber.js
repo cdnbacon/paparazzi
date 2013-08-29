@@ -9,6 +9,7 @@ var async   = require('async');
 var sprintf = require('sprintf').sprintf;
 var path    = require('path');
 var mkdirp  = require('mkdirp');
+var moment  = require('moment');
 
 /**
  * Ensures a directory always exists, and calls `callback` once done
@@ -82,21 +83,66 @@ function grab(options, callback) {
 
     browser.init(desired, function() {
       browser.get(uri.href(), function() {
-        browser.takeScreenshot(function (err, base64bytes) {
-          if (err) console.log(err);
+        var retries = 10;
+        var start   = new Date();
 
-          if (!err) {
-            var ctx = _.defaults(env, {
-              path: _s.slugify(uri.resource())
-            });
+        /**
+         * Wait until the browser is ready, with all content loaded
+         *
+         * @param next
+         */
+        function wait(next) {
+          browser.eval("document.readyState", function (err, result) {
+            if (err) return console.error(err);
 
-            var name = sprintf('%(path)s_on%(id)s.png', ctx);
+            var done = /loaded|complete/.test(result);
 
-            fs.writeFile(path.join(dir, name), new Buffer(base64bytes, 'base64'));
-          }
+            if (done) {
+              return next();
+            }
+            else {
+              retries--;
 
-          browser.quit(done);
-        });
+              if (retries > 0) {
+                return setTimeout(function () { wait(next); }, 500);
+              }
+
+              // ran out of retries
+              next(new Error('DOM not loaded, no retries left; waited ' + moment.duration(new Date() - start).humanize()));
+            }
+          });
+        }
+
+        /**
+         * Capture the screenshot
+         *
+         * @param next
+         */
+        function capture(next) {
+          browser.takeScreenshot(function (err, base64bytes) {
+            if (err) console.log(err);
+
+            if (!err) {
+              var ctx = _.defaults(env, {
+                path: _s.slugify(uri.resource())
+              });
+
+              var name = sprintf('%(path)s_on%(id)s.png', ctx);
+
+              fs.writeFile(path.join(dir, name), new Buffer(base64bytes, 'base64'));
+            }
+
+            browser.quit(next);
+          });
+        }
+
+        async.series(
+          [
+            wait,
+            capture
+          ],
+          done
+        );
       });
     });
   }
