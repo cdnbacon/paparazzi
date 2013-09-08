@@ -3,13 +3,13 @@
 'use strict';
 
 var argv = require('optimist')
-  .usage('Usage: $0 --username <selenium username> --password <selenium password> --url <webpage url> --save <dir> [--browser <browser id>]')
+  .usage('Usage: $0 --username <selenium username> --password <selenium password> [--url <webpage url>] --save <dir> [--browser <browser id>]')
   .demand('username')
   .describe('username', 'The selenium server user name')
   .demand('password')
   .describe('password', 'The selenium server password')
-  .demand('url')
-  .describe('url', 'The url of the page to screenshot')
+  .default('url', '')
+  .describe('url', 'The url of the page to screenshot (otherwise pulls from stdio lines)')
   .default('save', './screenshots')
   .describe('save', 'The directory in which to save the screenshots')
   .default('browser', '*')
@@ -18,19 +18,31 @@ var argv = require('optimist')
 
 var grabber = require('../index');
 var URIjs   = require('URIjs');
+var Q       = require('q');
 
 var selenium = new URIjs('http://ondemand.saucelabs.com/wd/hub')
   .username(argv.username)
   .password(argv.password);
 
-var options = {
-  dir:      argv.save,
-  url:      argv.url,
-  browser:  argv.browser,
-  selenium: selenium.href()
-};
+function getUrls() {
+  if (argv.url) {
+    return Q([argv.url]);
+  } else {
+    return require('../src/stdin').getUrls();
+  }
+}
 
-grabber.grab(options, function(err){
-  if (err) console.error(err);
-  console.log('Done');
-});
+getUrls()
+  .done(function(urls){
+    var options = {
+      dir:      argv.save,
+      urls:     urls,
+      browser:  argv.browser,
+      selenium: selenium.href()
+    };
+
+    grabber.grab(options, function(err){
+      if (err) console.error(err);
+      console.log('Done');
+    });
+  });

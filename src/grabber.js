@@ -31,19 +31,20 @@ function mkdir(dir, callback) {
  * Launches each browser in the matrix, visits the web page, grabs the screenshot and saves it
  *
  * @param options
- *        - url       The url to visit
+ *        - urls      The urls to visit: [url1, url2, ...]
  *        - selenium  The selenium server url
  *        - dir       The directory where to save screenshots
  *        - filter    The browser matrix filter, specify a browser id, like `IE6`
  * @param callback  The callback for completion
  */
 function grab(options, callback) {
-  var url      = options.url;
+  var urls     = options.urls;
   var selenium = options.selenium;
   var dir      = options.dir;
   var filter   = options.browser || '*';
   var browser  = wd.remote(selenium);
-  var uri      = new URIjs(url);
+
+  console.log('Setting up screenshots for the following url(s):\n  %s', urls.join('\n  '));
 
   browser.on('status', function(info){
     console.log('\x1b[36m%s\x1b[0m', info);
@@ -71,79 +72,95 @@ function grab(options, callback) {
     matrix = matrix.filter(function(b) {return b.id === filter;});
   }
 
-  function grabScreenshot(env, done) {
+  var retries = 10;
+  var start   = new Date();
+
+  /**
+   * Wait until the browser is ready, with all content loaded
+   *
+   * @param next
+   */
+  function wait(next) {
+    browser.eval("document.readyState", function (err, result) {
+      if (err) return console.error(err);
+
+      var done = /loaded|complete/.test(result);
+
+      if (done) {
+        return next();
+      }
+      else {
+        retries--;
+
+        if (retries > 0) {
+          return setTimeout(function () { wait(next); }, 500);
+        }
+
+        // ran out of retries
+        next(new Error('DOM not loaded, no retries left; waited ' + moment.duration(new Date() - start).humanize()));
+      }
+    });
+  }
+
+  /**
+   * Capture the screenshot
+   *
+   * @param env {Object}  The matrix entry to setup the browser
+   * @param uri {URIjs}   The uri to visit
+   * @param next {fn}     The callback
+   */
+  function capture(env, uri, next) {
+    browser.takeScreenshot(function (err, base64bytes) {
+      if (err) return next(err);
+
+      var ctx = _.defaults({
+        path: _s.slugify(uri.resource())
+      }, env);
+
+      var name = sprintf('%(path)s_on%(id)s.png', ctx);
+
+      fs.writeFile(path.join(dir, name), new Buffer(base64bytes, 'base64'));
+
+      next();
+    });
+  }
+
+  function grabScreenshot(options, done) {
     var desired = {
-      id:          env.id,
-      browserName: env.browser,
-      version:     env.version,
-      platform:    env.os,
+      id:          options.id,
+      browserName: options.browser,
+      version:     options.version,
+      platform:    options.os,
       tags:        ['paparazzi'],
-      name:        'Screenshot for ' + env.id
+      name:        'Screenshot for ' + options.id
     };
 
-    browser.init(desired, function() {
+    function visitAndCapture(uri, next) {
       browser.get(uri.href(), function() {
-        var retries = 10;
-        var start   = new Date();
-
-        /**
-         * Wait until the browser is ready, with all content loaded
-         *
-         * @param next
-         */
-        function wait(next) {
-          browser.eval("document.readyState", function (err, result) {
-            if (err) return console.error(err);
-
-            var done = /loaded|complete/.test(result);
-
-            if (done) {
-              return next();
-            }
-            else {
-              retries--;
-
-              if (retries > 0) {
-                return setTimeout(function () { wait(next); }, 500);
-              }
-
-              // ran out of retries
-              next(new Error('DOM not loaded, no retries left; waited ' + moment.duration(new Date() - start).humanize()));
-            }
-          });
-        }
-
-        /**
-         * Capture the screenshot
-         *
-         * @param next
-         */
-        function capture(next) {
-          browser.takeScreenshot(function (err, base64bytes) {
-            if (err) console.log(err);
-
-            if (!err) {
-              var ctx = _.defaults(env, {
-                path: _s.slugify(uri.resource())
-              });
-
-              var name = sprintf('%(path)s_on%(id)s.png', ctx);
-
-              fs.writeFile(path.join(dir, name), new Buffer(base64bytes, 'base64'));
-            }
-
-            browser.quit(next);
-          });
-        }
+        retries = 10;
+        start   = new Date();
 
         async.series(
           [
             wait,
-            capture
+            function(next) {
+              capture(options, uri, next);
+            }
           ],
-          done
+          next
         );
       });
+    }
+
+    browser.init(desired, function() {
+      async.forEachSeries(
+        urls.map(function(url) {return new URIjs(url);}),
+        visitAndCapture,
+        function(err) {
+          if (err) console.error(err);
+          browser.quit(done);
+        }
+      )
     });
   }
 
