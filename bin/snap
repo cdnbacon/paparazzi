@@ -17,6 +17,7 @@ var argv = require('optimist')
   .argv
 
 var grabber = require('../index');
+var moment  = require('moment');
 var URIjs   = require('URIjs');
 var Q       = require('q');
 
@@ -41,8 +42,10 @@ getUrls()
       selenium: selenium.href()
     };
 
+    var start = new Date();
+
     grabber.grab(options, function(err){
       if (err) console.error(err);
-      console.log('Done');
+      console.log('Done, took %s', moment.duration(new Date() - start).humanize());
     });
   });
